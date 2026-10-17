@@ -7,6 +7,7 @@ export type RecordInput = {
   eventId: string;
   name: string;
   visitorId?: string | null;
+  sessionId?: string | null;
   leadId?: string | null;
   path?: string | null;
   touch?: Touch | null;
@@ -24,9 +25,9 @@ export async function recordEvent(e: RecordInput): Promise<void> {
   const sql = await db();
   const t = e.touch || null;
   const rows = await sql`
-    INSERT INTO audit_events (event_id, name, visitor_id, lead_id, path, utm_source, utm_medium, utm_campaign,
+    INSERT INTO audit_events (event_id, name, visitor_id, session_id, lead_id, path, utm_source, utm_medium, utm_campaign,
                         utm_content, utm_term, has_fbclid, has_gclid, value, meta_status)
-    VALUES (${e.eventId}, ${e.name}, ${e.visitorId ?? null}, ${e.leadId ?? null}, ${e.path ?? null},
+    VALUES (${e.eventId}, ${e.name}, ${e.visitorId ?? null}, ${e.sessionId ?? null}, ${e.leadId ?? null}, ${e.path ?? null},
             ${t?.source ?? null}, ${t?.medium ?? null}, ${t?.campaign ?? null}, ${t?.content ?? null},
             ${t?.term ?? null}, ${Boolean(t?.fbclid)}, ${Boolean(t?.gclid)}, ${e.value ?? null},
             ${e.meta ? "pending" : "skipped"})

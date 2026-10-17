@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   const adSpend = str(body.adSpend, 20);
   const challenge = str(body.challenge, 1000);
   const visitorId = ID_RE.test(str(body.visitor_id, 80)) ? str(body.visitor_id, 80) : null;
+  const sessionId = ID_RE.test(str(body.session_id, 80)) ? str(body.session_id, 80) : null;
 
   const errors: string[] = [];
   if (name.length < 2) errors.push("name");
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
   };
   const tracking = {
     visitor_id: visitorId,
+    session_id: sessionId,
     utm_source: touch?.source ?? null,
     utm_medium: touch?.medium ?? null,
     utm_campaign: touch?.campaign ?? null,
@@ -117,6 +119,7 @@ export async function POST(req: NextRequest) {
           eventId: leadEventId,
           name: "Lead",
           visitorId,
+          sessionId,
           leadId,
           path: "/",
           touch,
@@ -127,6 +130,7 @@ export async function POST(req: NextRequest) {
         eventId: checkoutEventId,
         name: "InitiateCheckout",
         visitorId,
+        sessionId,
         leadId,
         path: "/",
         touch,

@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { hasDb } from "@/lib/db";
 import {
-  DIMENSIONS, RANGES, getBreakdown, getDaily, getFunnel, getLeads, getMetaHealth,
+  DIMENSIONS, RANGES, getBreakdown, getDaily, getFunnel, getLeads, getLiveVisitors, getMetaHealth,
   parseDimension, parseRange, rangeStart, type DimensionKey, type RangeKey,
 } from "@/lib/admin-data";
 import { metaConfigured } from "@/lib/meta";
 import { razorpayConfigured } from "@/lib/razorpay";
+import { AutoRefresh } from "./AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
 const pct = (a: number, b: number) => (b > 0 ? `${((a / b) * 100).toFixed(1)}%` : "–");
 const inr = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+const fmtDuration = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`);
 const fmtTime = (d: Date) =>
   d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -39,7 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
   let data;
   try {
     data = await Promise.all([
-      getFunnel(since), getBreakdown(since, dim), getDaily(since), getMetaHealth(since), getLeads(since, status || null),
+      getFunnel(since), getBreakdown(since, dim), getDaily(since), getMetaHealth(since), getLeads(since, status || null), getLiveVisitors(),
     ]);
   } catch (e) {
     console.error("admin data failed", e);
@@ -52,7 +54,7 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
       </main>
     );
   }
-  const [funnel, breakdown, daily, health, leads] = data;
+  const [funnel, breakdown, daily, health, leads, live] = data;
 
   const stages = [
     { label: "Visitors", n: funnel.visitors, help: "Unique visitors with a page view" },
@@ -82,7 +84,11 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
 
       <h2>Overview · {RANGES[range]}</h2>
       <div className="kpis">
-        <Kpi l="Visitors" v={funnel.visitors.toLocaleString("en-IN")} />
+        <Kpi l="Live now" v={live.toLocaleString("en-IN")} r="active in last 5 min" />
+        <Kpi l="Visitors" v={funnel.visitors.toLocaleString("en-IN")} r="unique people" />
+        <Kpi l="Sessions" v={funnel.sessions.toLocaleString("en-IN")} r="visits (30-min gap)" />
+        <Kpi l="Pages / session" v={funnel.sessions ? (funnel.pageViews / funnel.sessions).toFixed(1) : "–"} />
+        <Kpi l="Avg session" v={fmtDuration(funnel.avgSessionSeconds)} />
         <Kpi l="Leads" v={funnel.leads.toLocaleString("en-IN")} r={`${pct(funnel.leads, funnel.visitors)} of visitors`} />
         <Kpi l="Paid audits" v={funnel.paid.toLocaleString("en-IN")} r={`${pct(funnel.paid, funnel.visitors)} of visitors`} />
         <Kpi l="Revenue" v={inr(funnel.revenue)} />
@@ -115,15 +121,15 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
         <table className="tbl">
           <thead>
             <tr>
-              <th>{DIMENSIONS[dim]}</th><th className="num">Visitors</th><th className="num">CTA clicks</th>
+              <th>{DIMENSIONS[dim]}</th><th className="num">Visitors</th><th className="num">Sessions</th><th className="num">CTA clicks</th>
               <th className="num">Leads</th><th className="num">Paid</th><th className="num">Revenue</th><th className="num">Visitor → paid</th>
             </tr>
           </thead>
           <tbody>
-            {breakdown.length === 0 && <tr><td colSpan={7} className="small">No data yet.</td></tr>}
+            {breakdown.length === 0 && <tr><td colSpan={8} className="small">No data yet.</td></tr>}
             {breakdown.map((r) => (
               <tr key={r.key}>
-                <td>{r.key}</td><td className="num">{r.visitors}</td><td className="num">{r.ctaClicks}</td>
+                <td>{r.key}</td><td className="num">{r.visitors}</td><td className="num">{r.sessions}</td><td className="num">{r.ctaClicks}</td>
                 <td className="num">{r.leads}</td><td className="num">{r.paid}</td><td className="num">{inr(r.revenue)}</td>
                 <td className="num">{pct(r.paid, r.visitors)}</td>
               </tr>
@@ -135,11 +141,11 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
       <h2>Daily</h2>
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Day (IST)</th><th className="num">Visitors</th><th className="num">Leads</th><th className="num">Paid</th></tr></thead>
+          <thead><tr><th>Day (IST)</th><th className="num">Visitors</th><th className="num">Sessions</th><th className="num">Leads</th><th className="num">Paid</th></tr></thead>
           <tbody>
-            {daily.length === 0 && <tr><td colSpan={4} className="small">No data yet.</td></tr>}
+            {daily.length === 0 && <tr><td colSpan={5} className="small">No data yet.</td></tr>}
             {daily.map((d) => (
-              <tr key={d.day}><td>{d.day}</td><td className="num">{d.visitors}</td><td className="num">{d.leads}</td><td className="num">{d.paid}</td></tr>
+              <tr key={d.day}><td>{d.day}</td><td className="num">{d.visitors}</td><td className="num">{d.sessions}</td><td className="num">{d.leads}</td><td className="num">{d.paid}</td></tr>
             ))}
           </tbody>
         </table>
@@ -224,6 +230,7 @@ function AdminBar({ range, dim, status }: { range: RangeKey; dim: DimensionKey; 
           <Link key={r} href={`/admin?range=${r}&dim=${dim}${status ? `&status=${status}` : ""}`} className={r === range ? "on" : ""}>{RANGES[r]}</Link>
         ))}
       </div>
+      <AutoRefresh />
       <form method="post" action="/api/admin/logout">
         <button className="btn btn-sm btn-ghost">Log out</button>
       </form>

@@ -29,6 +29,9 @@ export function rangeStart(v: string | null | undefined): Date {
 
 export type Funnel = {
   visitors: number;
+  sessions: number;
+  pageViews: number;
+  avgSessionSeconds: number;
   engaged: number;
   ctaClicks: number;
   leads: number;
@@ -43,6 +46,8 @@ export async function getFunnel(since: Date): Promise<Funnel> {
   const [r] = await sql`
     SELECT
       count(DISTINCT visitor_id) FILTER (WHERE name = 'PageView')          AS visitors,
+      count(DISTINCT coalesce(session_id, visitor_id)) FILTER (WHERE name = 'PageView') AS sessions,
+      count(*)                   FILTER (WHERE name = 'PageView')          AS page_views,
       count(DISTINCT visitor_id) FILTER (WHERE name = 'ViewContent')       AS engaged,
       count(DISTINCT visitor_id) FILTER (WHERE name = 'CTAClick')          AS cta,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Lead')              AS leads,
@@ -51,8 +56,18 @@ export async function getFunnel(since: Date): Promise<Funnel> {
       coalesce(sum(value)        FILTER (WHERE name = 'Purchase'), 0)      AS revenue,
       count(*)                   FILTER (WHERE name = 'PaymentFailed')     AS failed
     FROM audit_events WHERE created_at >= ${since}`;
+  // Session length = first to last event (pings included) within the session.
+  const [d] = await sql`
+    SELECT coalesce(avg(secs), 0) AS avg_secs FROM (
+      SELECT extract(epoch FROM max(created_at) - min(created_at)) AS secs
+      FROM audit_events WHERE created_at >= ${since} AND session_id IS NOT NULL
+      GROUP BY session_id
+    ) s`;
   return {
     visitors: Number(r.visitors),
+    sessions: Number(r.sessions),
+    pageViews: Number(r.page_views),
+    avgSessionSeconds: Math.round(Number(d.avg_secs)),
     engaged: Number(r.engaged),
     ctaClicks: Number(r.cta),
     leads: Number(r.leads),
@@ -63,13 +78,14 @@ export async function getFunnel(since: Date): Promise<Funnel> {
   };
 }
 
-export type BreakdownRow = { key: string; visitors: number; ctaClicks: number; leads: number; paid: number; revenue: number };
+export type BreakdownRow = { key: string; visitors: number; sessions: number; ctaClicks: number; leads: number; paid: number; revenue: number };
 
 export async function getBreakdown(since: Date, dim: DimensionKey): Promise<BreakdownRow[]> {
   const sql = await db();
   const rows = await sql`
     SELECT coalesce(nullif(${sql(dim)}, ''), '(direct / none)') AS key,
       count(DISTINCT visitor_id) FILTER (WHERE name = 'PageView')  AS visitors,
+      count(DISTINCT coalesce(session_id, visitor_id)) FILTER (WHERE name = 'PageView') AS sessions,
       count(DISTINCT visitor_id) FILTER (WHERE name = 'CTAClick')  AS cta,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Lead')      AS leads,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Purchase')  AS paid,
@@ -79,6 +95,7 @@ export async function getBreakdown(since: Date, dim: DimensionKey): Promise<Brea
   return rows.map((r) => ({
     key: String(r.key),
     visitors: Number(r.visitors),
+    sessions: Number(r.sessions),
     ctaClicks: Number(r.cta),
     leads: Number(r.leads),
     paid: Number(r.paid),
@@ -86,18 +103,28 @@ export async function getBreakdown(since: Date, dim: DimensionKey): Promise<Brea
   }));
 }
 
-export type DailyRow = { day: string; visitors: number; leads: number; paid: number };
+export type DailyRow = { day: string; visitors: number; sessions: number; leads: number; paid: number };
 
 export async function getDaily(since: Date): Promise<DailyRow[]> {
   const sql = await db();
   const rows = await sql`
     SELECT to_char((created_at AT TIME ZONE 'Asia/Kolkata')::date, 'YYYY-MM-DD') AS day,
       count(DISTINCT visitor_id) FILTER (WHERE name = 'PageView') AS visitors,
+      count(DISTINCT coalesce(session_id, visitor_id)) FILTER (WHERE name = 'PageView') AS sessions,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Lead')     AS leads,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Purchase') AS paid
     FROM audit_events WHERE created_at >= ${since}
     GROUP BY 1 ORDER BY 1 DESC LIMIT 30`;
-  return rows.map((r) => ({ day: String(r.day), visitors: Number(r.visitors), leads: Number(r.leads), paid: Number(r.paid) }));
+  return rows.map((r) => ({ day: String(r.day), visitors: Number(r.visitors), sessions: Number(r.sessions), leads: Number(r.leads), paid: Number(r.paid) }));
+}
+
+// Visitors with any activity (page view, scroll, click or the 60s ping) in the last 5 minutes.
+export async function getLiveVisitors(): Promise<number> {
+  const sql = await db();
+  const [r] = await sql`
+    SELECT count(DISTINCT visitor_id) AS n FROM audit_events
+    WHERE created_at >= now() - interval '5 minutes' AND visitor_id IS NOT NULL`;
+  return Number(r.n);
 }
 
 export type MetaHealth = { sent: number; skipped: number; errors: number; lastErrors: { name: string; status: string; at: Date }[] };
@@ -108,7 +135,7 @@ export async function getMetaHealth(since: Date): Promise<MetaHealth> {
     SELECT count(*) FILTER (WHERE meta_status = 'sent') AS sent,
            count(*) FILTER (WHERE meta_status = 'skipped') AS skipped,
            count(*) FILTER (WHERE meta_status LIKE 'error:%' OR meta_status = 'pending') AS errors
-    FROM audit_events WHERE created_at >= ${since}`;
+    FROM audit_events WHERE created_at >= ${since} AND name <> 'Ping'`;
   const last = await sql<{ name: string; meta_status: string; created_at: Date }[]>`
     SELECT name, meta_status, created_at FROM audit_events
     WHERE created_at >= ${since} AND meta_status LIKE 'error:%' ORDER BY created_at DESC LIMIT 5`;

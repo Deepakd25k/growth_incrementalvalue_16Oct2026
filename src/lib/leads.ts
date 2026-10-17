@@ -12,6 +12,7 @@ export const purchaseEventId = (leadId: string) => `purchase_${leadId}`;
 type LeadRow = {
   id: string;
   visitor_id: string | null;
+  session_id: string | null;
   name: string;
   email: string;
   phone: string;
@@ -49,6 +50,7 @@ export async function markPaid(orderId: string, paymentId: string, leadIdHint?: 
     eventId: purchaseEventId(lead.id),
     name: "Purchase",
     visitorId: lead.visitor_id,
+    sessionId: lead.session_id,
     leadId: lead.id,
     path: "/thank-you",
     touch,

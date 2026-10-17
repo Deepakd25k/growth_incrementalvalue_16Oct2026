@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getAttribution, trackCtaClick, trackInitiateCheckout, trackLead, visitorId } from "@/lib/tracking";
+import { getAttribution, sessionId, trackCtaClick, trackInitiateCheckout, trackLead, visitorId } from "@/lib/tracking";
 import { priceLabel, site } from "@/config/site";
 
 type RazorpayResponse = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string };
@@ -92,7 +92,7 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, visitor_id: visitorId(), attribution: getAttribution(), url: location.href.split("#")[0] }),
+      body: JSON.stringify({ ...form, visitor_id: visitorId(), session_id: sessionId(), attribution: getAttribution(), url: location.href.split("#")[0] }),
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     if (!res || !res.ok) {

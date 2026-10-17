@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS audit_leads (
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
   visitor_id           text,
+  session_id           text,
   name                 text NOT NULL,
   email                text NOT NULL,
   phone                text NOT NULL,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
   event_id      text NOT NULL UNIQUE,
   name          text NOT NULL,           -- PageView | ViewContent | CTAClick | Lead | InitiateCheckout | Purchase | PaymentFailed
   visitor_id    text,
+  session_id    text,
   lead_id       uuid,
   path          text,
   utm_source    text,
@@ -59,4 +61,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
 CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_name_created_idx ON audit_events (name, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_visitor_idx ON audit_events (visitor_id);
+
+-- Added after the first release; keeps older databases in step.
+ALTER TABLE audit_leads  ADD COLUMN IF NOT EXISTS session_id text;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS session_id text;
 `;

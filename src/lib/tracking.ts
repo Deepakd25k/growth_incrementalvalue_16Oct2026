@@ -4,6 +4,7 @@
 //  PageView         | yes, same event_id   | yes                | GA4 auto         | yes
 //  ViewContent      | yes, same event_id   | yes                | -                | yes (pricing seen)
 //  CTAClick         | -                    | -                  | -                | yes (internal only)
+//  Ping (60s)       | -                    | -                  | -                | yes (live visitors, session length)
 //  Lead             | yes, same event_id   | yes                | generate_lead    | yes
 //  InitiateCheckout | yes, same event_id   | yes                | begin_checkout   | yes
 //  Purchase         | yes, same event_id   | yes (only once)    | purchase + Ads   | yes
@@ -36,7 +37,7 @@ function readCookie(name: string): string | undefined {
 
 function writeCookie(name: string, value: string, days: number) {
   const secure = location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${days * 86400}; Path=/; SameSite=Lax${secure}`;
+  document.cookie = `${name}=${encodeURIComponent(value)}; Max-Age=${Math.round(days * 86400)}; Path=/; SameSite=Lax${secure}`;
 }
 
 function randomId(len = 16) {
@@ -72,6 +73,14 @@ export function visitorId(): string {
   if (!id || !/^[A-Za-z0-9_-]{8,80}$/.test(id)) id = `v_${randomId(12)}`;
   writeCookie("dg_vid", id, 365);
   storageSet("dg_vid", id);
+  return id;
+}
+
+// A session ends after 30 minutes without activity (the GA convention). Every event renews it.
+export function sessionId(): string {
+  let id = readCookie("dg_sid");
+  if (!id || !/^[A-Za-z0-9_-]{8,80}$/.test(id)) id = `s_${randomId(12)}`;
+  writeCookie("dg_sid", id, 30 / (24 * 60));
   return id;
 }
 
@@ -217,6 +226,7 @@ function sendToServer(name: string, eventId: string, extra: Record<string, unkno
     name,
     event_id: eventId,
     visitor_id: visitorId(),
+    session_id: sessionId(),
     path: location.pathname,
     url: location.href.split("#")[0],
     attribution: getAttribution(),
@@ -251,6 +261,22 @@ export function trackViewContent(section: string) {
   const id = newEventId("vc");
   pixel("ViewContent", { content_name: section, content_type: "product", content_ids: ["d2c-audit"] }, id);
   sendToServer("ViewContent", id, { section });
+}
+
+let pingTimer: ReturnType<typeof setInterval> | undefined;
+
+// Internal "still here" signal every 60s while the tab is visible, for live visitors and
+// session length. Stops after 30 minutes. Never sent to Meta or Google.
+export function startPing() {
+  if (pingTimer) return;
+  const started = Date.now();
+  pingTimer = setInterval(() => {
+    if (Date.now() - started > 30 * 60 * 1000) {
+      clearInterval(pingTimer);
+      return;
+    }
+    if (document.visibilityState === "visible") sendToServer("Ping", newEventId("ping"));
+  }, 60 * 1000);
 }
 
 export function trackCtaClick(location: string) {

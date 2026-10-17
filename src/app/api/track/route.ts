@@ -7,7 +7,7 @@ import { clientIp, hasConsent, readJson, str, userAgent } from "@/lib/request";
 
 // Browser-originated events only. Lead, InitiateCheckout and Purchase are created by the
 // checkout/payment endpoints so they cannot be faked from the browser.
-const ALLOWED = new Set(["PageView", "ViewContent", "CTAClick"]);
+const ALLOWED = new Set(["PageView", "ViewContent", "CTAClick", "Ping"]);
 const SENT_TO_META = new Set(["PageView", "ViewContent"]);
 const ID_RE = /^[A-Za-z0-9_-]{8,80}$/;
 
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   const name = str(body.name, 40);
   const eventId = str(body.event_id, 80);
   const visitorId = str(body.visitor_id, 80);
+  const sessionId = ID_RE.test(str(body.session_id, 80)) ? str(body.session_id, 80) : null;
   if (!ALLOWED.has(name) || !ID_RE.test(eventId) || !ID_RE.test(visitorId)) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
       eventId,
       name,
       visitorId,
+      sessionId,
       path: str(body.path, 200) || "/",
       touch,
       meta:

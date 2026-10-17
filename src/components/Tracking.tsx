@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { captureAttribution, initThirdParty, trackPageView } from "@/lib/tracking";
+import { captureAttribution, initThirdParty, startPing, trackPageView } from "@/lib/tracking";
 
 export function Tracking() {
   const pathname = usePathname();
@@ -11,6 +11,7 @@ export function Tracking() {
     captureAttribution();
     initThirdParty();
     trackPageView(pathname);
+    startPing();
   }, [pathname]);
 
   return null;
