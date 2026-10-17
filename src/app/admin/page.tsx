@@ -36,9 +36,23 @@ export default async function AdminPage({ searchParams }: { searchParams: SP }) 
   }
 
   const since = rangeStart(range);
-  const [funnel, breakdown, daily, health, leads] = await Promise.all([
-    getFunnel(since), getBreakdown(since, dim), getDaily(since), getMetaHealth(since), getLeads(since, status || null),
-  ]);
+  let data;
+  try {
+    data = await Promise.all([
+      getFunnel(since), getBreakdown(since, dim), getDaily(since), getMetaHealth(since), getLeads(since, status || null),
+    ]);
+  } catch (e) {
+    console.error("admin data failed", e);
+    return (
+      <main className="container">
+        <AdminBar range={range} dim={dim} status={status} />
+        <div className="form-error" style={{ marginTop: 24 }}>
+          Could not read the database: {(e as Error).message}. Check DATABASE_URL in Vercel → Settings → Environment Variables, then redeploy.
+        </div>
+      </main>
+    );
+  }
+  const [funnel, breakdown, daily, health, leads] = data;
 
   const stages = [
     { label: "Visitors", n: funnel.visitors, help: "Unique visitors with a page view" },
