@@ -33,13 +33,13 @@ export async function markPaid(orderId: string, paymentId: string, leadIdHint?: 
   const sql = await db();
   const hint = leadIdHint && UUID_RE.test(leadIdHint) ? leadIdHint : null;
   const rows = await sql<LeadRow[]>`
-    UPDATE leads SET status = 'paid', razorpay_order_id = ${orderId}, razorpay_payment_id = ${paymentId},
+    UPDATE audit_leads SET status = 'paid', razorpay_order_id = ${orderId}, razorpay_payment_id = ${paymentId},
                      paid_at = now(), updated_at = now()
     WHERE (razorpay_order_id = ${orderId} OR id = ${hint}) AND status <> 'paid'
     RETURNING *`;
   if (rows.length === 0) {
     const existing = await sql<{ id: string }[]>`
-      SELECT id FROM leads WHERE razorpay_order_id = ${orderId} OR id = ${hint} LIMIT 1`;
+      SELECT id FROM audit_leads WHERE razorpay_order_id = ${orderId} OR id = ${hint} LIMIT 1`;
     return existing[0] ? { leadId: existing[0].id } : null;
   }
   const lead = rows[0];

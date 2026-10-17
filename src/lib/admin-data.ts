@@ -50,7 +50,7 @@ export async function getFunnel(since: Date): Promise<Funnel> {
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Purchase')          AS paid,
       coalesce(sum(value)        FILTER (WHERE name = 'Purchase'), 0)      AS revenue,
       count(*)                   FILTER (WHERE name = 'PaymentFailed')     AS failed
-    FROM events WHERE created_at >= ${since}`;
+    FROM audit_events WHERE created_at >= ${since}`;
   return {
     visitors: Number(r.visitors),
     engaged: Number(r.engaged),
@@ -74,7 +74,7 @@ export async function getBreakdown(since: Date, dim: DimensionKey): Promise<Brea
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Lead')      AS leads,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Purchase')  AS paid,
       coalesce(sum(value)        FILTER (WHERE name = 'Purchase'), 0) AS revenue
-    FROM events WHERE created_at >= ${since}
+    FROM audit_events WHERE created_at >= ${since}
     GROUP BY 1 ORDER BY paid DESC, leads DESC, visitors DESC LIMIT 50`;
   return rows.map((r) => ({
     key: String(r.key),
@@ -95,7 +95,7 @@ export async function getDaily(since: Date): Promise<DailyRow[]> {
       count(DISTINCT visitor_id) FILTER (WHERE name = 'PageView') AS visitors,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Lead')     AS leads,
       count(DISTINCT lead_id)    FILTER (WHERE name = 'Purchase') AS paid
-    FROM events WHERE created_at >= ${since}
+    FROM audit_events WHERE created_at >= ${since}
     GROUP BY 1 ORDER BY 1 DESC LIMIT 30`;
   return rows.map((r) => ({ day: String(r.day), visitors: Number(r.visitors), leads: Number(r.leads), paid: Number(r.paid) }));
 }
@@ -108,9 +108,9 @@ export async function getMetaHealth(since: Date): Promise<MetaHealth> {
     SELECT count(*) FILTER (WHERE meta_status = 'sent') AS sent,
            count(*) FILTER (WHERE meta_status = 'skipped') AS skipped,
            count(*) FILTER (WHERE meta_status LIKE 'error:%' OR meta_status = 'pending') AS errors
-    FROM events WHERE created_at >= ${since}`;
+    FROM audit_events WHERE created_at >= ${since}`;
   const last = await sql<{ name: string; meta_status: string; created_at: Date }[]>`
-    SELECT name, meta_status, created_at FROM events
+    SELECT name, meta_status, created_at FROM audit_events
     WHERE created_at >= ${since} AND meta_status LIKE 'error:%' ORDER BY created_at DESC LIMIT 5`;
   return {
     sent: Number(c.sent),
@@ -149,7 +149,7 @@ export async function getLeads(since: Date, status: string | null): Promise<Lead
   return sql<LeadListRow[]>`
     SELECT id, created_at, status, name, email, phone, brand, website, ad_spend, challenge, amount, paid_at,
            razorpay_payment_id, utm_source, utm_medium, utm_campaign, utm_content, fbclid, gclid, landing_url
-    FROM leads
+    FROM audit_leads
     WHERE created_at >= ${since} ${filter ? sql`AND status = ${filter}` : sql``}
     ORDER BY created_at DESC LIMIT 200`;
 }

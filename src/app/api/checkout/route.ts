@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   // Someone retrying within a day reuses their lead, so one person = one lead in the funnel.
   const existing = await sql<{ id: string }[]>`
-    SELECT id FROM leads
+    SELECT id FROM audit_leads
     WHERE lower(email) = ${email} AND status <> 'paid' AND created_at > now() - interval '24 hours'
     ORDER BY created_at DESC LIMIT 1`;
   const isNewLead = existing.length === 0;
@@ -89,11 +89,11 @@ export async function POST(req: NextRequest) {
   };
 
   if (isNewLead) {
-    await sql`INSERT INTO leads ${sql({ id: leadId, ...contact, ...tracking })}`;
+    await sql`INSERT INTO audit_leads ${sql({ id: leadId, ...contact, ...tracking })}`;
   } else {
     // A retry without attribution (e.g. another device) must not wipe the ad that brought this lead in.
     const update = touch && visitorId ? { ...contact, ...tracking } : contact;
-    await sql`UPDATE leads SET ${sql(update)}, updated_at = now() WHERE id = ${leadId}`;
+    await sql`UPDATE audit_leads SET ${sql(update)}, updated_at = now() WHERE id = ${leadId}`;
   }
 
   let order: { id: string };
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     console.error(e);
     return NextResponse.json({ error: "Could not start payment. Please try again." }, { status: 502 });
   }
-  await sql`UPDATE leads SET razorpay_order_id = ${order.id}, status = 'checkout', updated_at = now() WHERE id = ${leadId}`;
+  await sql`UPDATE audit_leads SET razorpay_order_id = ${order.id}, status = 'checkout', updated_at = now() WHERE id = ${leadId}`;
 
   const leadEventId = `lead_${leadId}`;
   const checkoutEventId = `ic_${order.id}`;

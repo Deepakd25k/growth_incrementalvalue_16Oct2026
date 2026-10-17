@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!UUID_RE.test(lid) || !hasDb()) return NextResponse.json({ paid: false });
   const sql = await db();
   const rows = await sql<{ status: string; amount: number; currency: string; name: string; email: string; razorpay_payment_id: string | null }[]>`
-    SELECT status, amount, currency, name, email, razorpay_payment_id FROM leads WHERE id = ${lid}`;
+    SELECT status, amount, currency, name, email, razorpay_payment_id FROM audit_leads WHERE id = ${lid}`;
   const lead = rows[0];
   if (!lead || lead.status !== "paid") return NextResponse.json({ paid: false });
   return NextResponse.json({

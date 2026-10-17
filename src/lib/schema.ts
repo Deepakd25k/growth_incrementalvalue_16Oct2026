@@ -1,6 +1,6 @@
 // Funnel tracking schema. Applied automatically on first DB use (see db.ts); safe to run repeatedly.
 export const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS leads (
+CREATE TABLE IF NOT EXISTS audit_leads (
   id                   uuid PRIMARY KEY,
   created_at           timestamptz NOT NULL DEFAULT now(),
   updated_at           timestamptz NOT NULL DEFAULT now(),
@@ -35,10 +35,10 @@ CREATE TABLE IF NOT EXISTS leads (
   consent              boolean NOT NULL DEFAULT true,
   notes                text
 );
-CREATE INDEX IF NOT EXISTS leads_created_idx ON leads (created_at DESC);
-CREATE INDEX IF NOT EXISTS leads_email_idx ON leads (lower(email));
+CREATE INDEX IF NOT EXISTS audit_leads_created_idx ON audit_leads (created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_leads_email_idx ON audit_leads (lower(email));
 
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS audit_events (
   id            bigserial PRIMARY KEY,
   event_id      text NOT NULL UNIQUE,
   name          text NOT NULL,           -- PageView | ViewContent | CTAClick | Lead | InitiateCheckout | Purchase | PaymentFailed
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS events (
   meta_status   text,                    -- sent | skipped | error:<msg>
   created_at    timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS events_created_idx ON events (created_at DESC);
-CREATE INDEX IF NOT EXISTS events_name_created_idx ON events (name, created_at DESC);
-CREATE INDEX IF NOT EXISTS events_visitor_idx ON events (visitor_id);
+CREATE INDEX IF NOT EXISTS audit_events_created_idx ON audit_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_name_created_idx ON audit_events (name, created_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_visitor_idx ON audit_events (visitor_id);
 `;

@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const sql = await db();
   const since = rangeStart(req.nextUrl.searchParams.get("range"));
   const rows = await sql`
-    SELECT ${sql(COLUMNS as unknown as string[])} FROM leads WHERE created_at >= ${since} ORDER BY created_at DESC`;
+    SELECT ${sql(COLUMNS as unknown as string[])} FROM audit_leads WHERE created_at >= ${since} ORDER BY created_at DESC`;
   const lines = [COLUMNS.join(",")];
   for (const r of rows) lines.push(COLUMNS.map((c) => csvCell(c === "amount" ? Number(r[c]) / 100 : r[c])).join(","));
   return new NextResponse(lines.join("\n"), {
